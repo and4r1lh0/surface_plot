@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const STORAGE_KEY = 'surfacePlotState';
     const MAX_GRID_POINTS = 500;
 
-    const PLOT_CONFIG_2D = { displayModeBar: false, scrollZoom: true, dragmode: 'pan' };
+    const PLOT_CONFIG_2D = { displayModeBar: false, scrollZoom: false, dragmode: 'zoom' };
     const PLOT_CONFIG_3D = { displayModeBar: false };
 
     const DEFAULTS = {
@@ -189,19 +189,32 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function setupTableInteraction(tableWrapper, dataArray, plotDiv) {
-        tableWrapper.addEventListener('input', (e) => {
-            if (e.target.tagName !== 'INPUT') return;
-            const index = parseInt(e.target.dataset.index);
-            const value = parseFloat(e.target.value);
-            if (!isNaN(value)) {
-                dataArray[index] = value;
-                Plotly.restyle(plotDiv, { y: [dataArray] }, [0]);
-                updateAllLayoutsAndSave();
-            }
-        });
-    }
+function setupTableInteraction(tableWrapper, dataArray, plotDiv) {
+    tableWrapper.addEventListener('change', (e) => {
+        if (e.target.tagName !== 'INPUT') return;
 
+        const index = parseInt(e.target.dataset.index);
+        const value = parseFloat(e.target.value);
+        
+        if (!isNaN(value)) {
+            dataArray[index] = value;
+            
+            Plotly.restyle(plotDiv, { y: [dataArray] }, [0]);
+            
+            updateAllLayoutsAndSave();
+
+        } else {
+            e.target.value = dataArray[index].toFixed(3);
+        }
+    });
+
+    tableWrapper.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.target.blur();
+            e.preventDefault();
+        }
+    });
+}
     function init() {
         loadState();
         updateUIFromSettings();
