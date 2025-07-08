@@ -3,180 +3,192 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Интерактивная 3D Поверхность</title>
-    <!-- Загружаем Pyodide -->
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    <title>Интерактивная 3D Поверхность (JS + Plotly.js)</title>
+    <!-- Подключаем библиотеку Plotly.js из CDN -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; margin: 1em; }
-        #loading-message { font-size: 1.2em; color: #555; }
-        #plot-container { margin-top: 20px; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 1em;
+            background-color: #f8f9fa;
+        }
+        h1, p {
+            text-align: center;
+        }
+        .plot-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 20px;
+        }
+        .plot-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .plot-2d {
+            width: 500px;
+            height: 350px;
+        }
+        .plot-3d {
+            width: 700px;
+            height: 720px;
+        }
     </style>
 </head>
+
 <body>
+
     <h1>Интерактивная 3D Поверхность</h1>
-    <p id="loading-message">Загрузка Python и библиотек... Пожалуйста, подождите.</p>
-    <!-- Сюда Matplotlib будет отрисовывать график -->
-    <div id="plot-container"></div>
+    <p>Перетаскивайте точки на 2D-графиках для изменения 3D-поверхности</p>
 
-    <script type="text/javascript">
-        // Основной асинхронный скрипт для запуска Pyodide
-        async function main() {
-            // 1. Инициализация Pyodide
-            let pyodide = await loadPyodide();
-            
-            // Сообщаем пользователю о загрузке пакетов
-            document.getElementById('loading-message').innerText = 'Загрузка NumPy и Matplotlib...';
+    <div class="plot-container">
+        <div class="plot-wrapper">
+            <!-- Контейнеры для 2D-графиков -->
+            <div id="plotX" class="plot-2d"></div>
+            <div id="plotZ" class="plot-2d"></div>
+        </div>
+        <!-- Контейнер для 3D-графика -->
+        <div id="plot3D" class="plot-3d"></div>
+    </div>
 
-            // 2. Установка необходимых Python-пакетов
-            await pyodide.loadPackage(["numpy", "matplotlib"]);
-            
-            // Убираем сообщение о загрузке
-            document.getElementById('loading-message').style.display = 'none';
+    <script>
+    // --- Глобальные параметры (аналогично Python) ---
+    const GRID_POINTS = 100;
+    const HUMP_HEIGHT = 2.0;
+    const HUMP_WIDTH = 3.0;
 
-            // 3. Ваш Python-код, помещенный в многострочную строку JavaScript
-            const pythonCode = `
-import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
+    // --- JavaScript-аналоги функций NumPy ---
 
-# --- ВАЖНО: Устанавливаем бэкенд для работы в браузере ---
-matplotlib.use('module://matplotlib_pyodide.html5_canvas_backend')
+    /**
+     * Создает массив чисел в заданном диапазоне (аналог np.linspace).
+     */
+    function linspace(start, stop, num) {
+        const step = (stop - start) / (num - 1);
+        return Array.from({ length: num }, (_, i) => start + i * step);
+    }
 
-# --- Параметры ---
-GRID_POINTS = 100   # Количество точек в сетке
-HUMP_HEIGHT = 2.0   # Начальная высота горба
-HUMP_WIDTH = 3.0    # Начальная ширина горба
+    /**
+     * Создает гауссовский горб (аналог make_single_hump).
+     */
+    function makeSingleHump(coords) {
+        const sigma = HUMP_WIDTH / (2 * Math.sqrt(2 * Math.log(2)));
+        const center = 0.0;
+        const sigmaSq2 = 2 * sigma ** 2;
+        return coords.map(coord => HUMP_HEIGHT * Math.exp(-((coord - center) ** 2) / sigmaSq2));
+    }
 
-class ProfileDragger:
-    """
-    Класс для интерактивного управления 2D-профилями и обновления 3D-поверхности.
-    """
-    def __init__(self):
-        # 1. --- Создание исходных данных ---
-        self.x_data = np.linspace(-10, 10, GRID_POINTS)
-        self.z_data = np.linspace(-10, 10, GRID_POINTS)
+    /**
+     * Вычисляет внешнее произведение двух векторов для создания поверхности (аналог np.outer).
+     */
+    function outerProduct(v1, v2) {
+        return v1.map(e1 => v2.map(e2 => e1 * e2));
+    }
 
-        def make_single_hump(coords):
-            """Создает один гауссовский горб с центром в 0."""
-            sigma = HUMP_WIDTH / (2 * np.sqrt(2 * np.log(2)))
-            center = 0.0
-            hump = HUMP_HEIGHT * np.exp(-((coords - center)**2) / (2 * sigma**2))
-            return hump
+    // --- Исходные данные ---
+    const x_data = linspace(-10, 10, GRID_POINTS);
+    const z_data = linspace(-10, 10, GRID_POINTS);
+    let y_x_data = makeSingleHump(x_data);
+    let y_z_data = makeSingleHump(z_data);
 
-        self.y_x_data = make_single_hump(self.x_data)
-        self.y_z_data = make_single_hump(self.z_data)
-        
-        self.X, self.Z = np.meshgrid(self.x_data, self.z_data)
+    // --- Получаем ссылки на DOM-элементы ---
+    const plotXDiv = document.getElementById('plotX');
+    const plotZDiv = document.getElementById('plotZ');
+    const plot3DDiv = document.getElementById('plot3D');
 
-        # 2. --- Настройка окна и графиков ---
-        self.fig = plt.figure(figsize=(15, 7))
-        self.fig.suptitle('Перетаскивайте точки на 2D-графиках для изменения 3D-поверхности', fontsize=16)
+    // --- Определяем макеты (layout) для графиков ---
+    const layoutX = {
+        title: 'Профиль по оси X (Y от X)',
+        xaxis: { title: 'X' },
+        yaxis: { title: 'Y', range: [-1, HUMP_HEIGHT + 2] },
+        margin: { l: 50, r: 30, b: 50, t: 50 }
+    };
 
-        self.ax_x = self.fig.add_subplot(2, 2, 1)
-        self.ax_z = self.fig.add_subplot(2, 2, 3)
-        self.ax_3d = self.fig.add_subplot(1, 2, 2, projection='3d')
-        
-        # 3. --- Первичная отрисовка ---
-        self.line_x, = self.ax_x.plot(self.x_data, self.y_x_data, 'b-o', markersize=4, picker=5)
-        self.line_z, = self.ax_z.plot(self.z_data, self.y_z_data, 'r-o', markersize=4, picker=5)
-        self.setup_2d_axes()
-        
-        self.update_3d_plot()
+    const layoutZ = {
+        title: 'Профиль по оси Z (Y от Z)',
+        xaxis: { title: 'Z' },
+        yaxis: { title: 'Y', range: [-1, HUMP_HEIGHT + 2] },
+        margin: { l: 50, r: 30, b: 50, t: 50 }
+    };
 
-        # 4. --- Управление состоянием интерактивности ---
-        self.active_artist = None
-        self.active_index = None
-        
-        # 5. --- Подключение обработчиков событий ---
-        self.fig.canvas.mpl_connect('button_press_event', self.on_press)
-        self.fig.canvas.mpl_connect('motion_notify_event', self.on_motion)
-        self.fig.canvas.mpl_connect('button_release_event', self.on_release)
-
-    def setup_2d_axes(self):
-        self.ax_x.set_title('Профиль по оси X (Y от X)')
-        self.ax_x.set_ylabel('Y')
-        self.ax_x.grid(True)
-        self.ax_x.set_ylim(-1, HUMP_HEIGHT + 2)
-
-        self.ax_z.set_title('Профиль по оси Z (Y от Z)')
-        self.ax_z.set_xlabel('Z')
-        self.ax_z.set_ylabel('Y')
-        self.ax_z.grid(True)
-        self.ax_z.set_ylim(-1, HUMP_HEIGHT + 2)
-
-    def update_3d_plot(self):
-        self.ax_3d.clear()
-        Y_3D = np.outer(self.y_x_data, self.y_z_data) / HUMP_HEIGHT
-        
-        self.ax_3d.plot_surface(self.X, self.Z, Y_3D.T, cmap='viridis', rstride=4, cstride=4)
-        
-        self.ax_3d.set_title('Итоговая 3D-поверхность')
-        self.ax_3d.set_xlabel('Ось X')
-        self.ax_3d.set_ylabel('Ось Z')
-        self.ax_3d.set_zlabel('Ось Y (Высота)')
-        self.ax_3d.set_zlim(-1, HUMP_HEIGHT + 2)
-        
-        self.fig.canvas.draw_idle()
-
-    def on_press(self, event):
-        if event.inaxes not in [self.ax_x, self.ax_z]:
-            return
-            
-        artist = self.line_x if event.inaxes == self.ax_x else self.line_z
-        # Проверка, содержит ли событие нужные атрибуты
-        if event.xdata is None or event.ydata is None:
-            return
-
-        x_coords, y_coords = artist.get_data()
-        distances = np.sqrt((x_coords - event.xdata)**2 + (y_coords - event.ydata)**2)
-        
-        # Порог захвата точки можно подбирать
-        if distances.min() < 0.5:
-            self.active_artist = artist
-            self.active_index = np.argmin(distances)
+    const layout3D = {
+        title: 'Итоговая 3D-поверхность',
+        scene: {
+            xaxis: { title: 'Ось X' },
+            yaxis: { title: 'Ось Z' },
+            zaxis: { title: 'Ось Y (Высота)', range: [-1, HUMP_HEIGHT + 2] }
+        },
+        margin: { l: 0, r: 0, b: 0, t: 40 }
+    };
     
-    def on_motion(self, event):
-        if self.active_artist is None or event.inaxes != self.active_artist.axes or event.ydata is None:
-            return
+    // --- Функция обновления 3D-поверхности ---
+    function update3DPlot() {
+        const surfaceData = outerProduct(y_z_data, y_x_data);
+        const normalizedSurface = surfaceData.map(row => row.map(val => val / HUMP_HEIGHT));
 
-        new_y = event.ydata
-        
-        if self.active_artist == self.line_x:
-            self.y_x_data[self.active_index] = new_y
-            self.line_x.set_ydata(self.y_x_data)
-        else:
-            self.y_z_data[self.active_index] = new_y
-            self.line_z.set_ydata(self.y_z_data)
-            
-        self.fig.canvas.draw_idle()
+        // Используем Plotly.react для эффективного обновления данных без полной перерисовки
+        Plotly.react(plot3DDiv, [{
+            x: x_data,
+            y: z_data,
+            z: normalizedSurface,
+            type: 'surface',
+            colorscale: 'Viridis',
+            cmin: -1,
+            cmax: HUMP_HEIGHT
+        }], layout3D);
+    }
 
-    def on_release(self, event):
-        if self.active_artist is not None:
-            self.active_artist = None
-            self.active_index = None
-            self.update_3d_plot()
+    // --- Первичная отрисовка всех графиков ---
+    Plotly.newPlot(plotXDiv, [{ x: x_data, y: y_x_data, mode: 'lines+markers', marker: {size: 5} }], layoutX);
+    Plotly.newPlot(plotZDiv, [{ x: z_data, y: y_z_data, mode: 'lines+markers', marker: {size: 5, color: 'red'} }], layoutZ);
+    update3DPlot(); // Первичная отрисовка 3D-графика
 
-# --- Запуск программы ---
-dragger = ProfileDragger()
+    // --- Логика интерактивного перетаскивания ---
+    let isDragging = false;
 
-# --- ВАЖНО: plt.show() не нужен, Pyodide отобразит график автоматически ---
-# plt.show()
+    // Функция-обработчик для обновления 2D-точек
+    function handleInteraction(eventData, plotDiv, dataArray, plotType) {
+        // eventData содержит информацию о событии, включая координаты точки
+        if (!eventData || !eventData.points || eventData.points.length === 0) return;
 
-# Отображаем фигуру в указанном div
-plt.get_current_fig_manager().canvas.show()
-`;
+        // Находим индекс ближайшей точки и новую y-координату курсора
+        const pointIndex = eventData.points[0].pointNumber;
+        const newY = eventData.yvals[0];
 
-            // 4. Запускаем Python-код
-            try {
-                await pyodide.runPythonAsync(pythonCode);
-            } catch (err) {
-                console.error(err);
-                document.getElementById('plot-container').innerText = 'Произошла ошибка при выполнении Python-кода. Подробности в консоли браузера.';
-            }
+        // Ограничиваем перемещение по оси Y
+        dataArray[pointIndex] = Math.max(-1, Math.min(newY, HUMP_HEIGHT + 2));
+
+        // Обновляем только y-координаты на 2D-графике. Это очень быстро.
+        Plotly.restyle(plotDiv, { y: [dataArray] }, [0]);
+    }
+
+    // Глобальные слушатели мыши для отслеживания состояния перетаскивания
+    window.addEventListener('mousedown', () => { isDragging = true; });
+    window.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            // Обновляем 3D-график только после того, как отпустили кнопку мыши
+            update3DPlot();
         }
+    });
 
-        // Вызываем нашу главную функцию
-        main();
+    // Вешаем обработчики событий на 2D-графики
+    plotXDiv.on('plotly_click', (d) => handleInteraction(d, plotXDiv, y_x_data, 'X'));
+    plotXDiv.on('plotly_hover', (d) => {
+        if (isDragging) {
+            handleInteraction(d, plotXDiv, y_x_data, 'X');
+        }
+    });
+
+    plotZDiv.on('plotly_click', (d) => handleInteraction(d, plotZDiv, y_z_data, 'Z'));
+    plotZDiv.on('plotly_hover', (d) => {
+        if (isDragging) {
+            handleInteraction(d, plotZDiv, y_z_data, 'Z');
+        }
+    });
+
     </script>
 </body>
 </html>
