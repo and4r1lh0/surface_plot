@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from pyscript import display, Element
+# <<< ИЗМЕНЕНИЕ 1: Убираем импорт Element, он больше не нужен >>>
+from pyscript import display
 
 # --- Параметры ---
 GRID_POINTS = 50
@@ -102,10 +103,12 @@ class ProfileDragger:
             self.update_3d_plot()
 
 # --- Запуск ---
-# Скрываем сообщение о загрузке и показываем контейнер
-loading_msg = Element("loading-message")
+
+# <<< ИЗМЕНЕНИЕ 2: Используем document.querySelector вместо Element() >>>
+# PyScript автоматически предоставляет доступ к объекту document
+loading_msg = document.querySelector("#loading-message")
 loading_msg.style.display = "none"
-main_container = Element("main-container")
+main_container = document.querySelector("#main-container")
 main_container.style.visibility = "visible"
 
 # Создаем экземпляр нашего приложения
