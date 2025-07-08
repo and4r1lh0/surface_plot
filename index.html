@@ -1,247 +1,378 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from pyscript import display
-import js
-import io
-
-# Класс для работы с localStorage браузера
-class Storage:
-    def get(self, key, default):
-        value = js.window.localStorage.getItem(key)
-        return value if value is not None else default
-    
-    def set(self, key, value):
-        js.window.localStorage.setItem(key, value)
-        
-    def clear(self):
-        js.window.localStorage.clear()
-
-# Главный класс приложения
-class App:
-    def __init__(self):
-        self.storage = Storage()
-        self.load_settings()
-        self.setup_event_listeners()
-        self.rebuild_app()
-
-    def load_settings(self):
-        """Загружает настройки из localStorage и обновляет виджеты."""
-        self.settings = {
-            'grid_points': int(self.storage.get('grid_points', '50')),
-            'min_val': float(self.storage.get('min_val', '-10')),
-            'max_val': float(self.storage.get('max_val', '10')),
-            'x_label': self.storage.get('x_label', 'Ось X'),
-            'z_label': self.storage.get('z_label', 'Ось Z'),
-            'y_label': self.storage.get('y_label', 'Y (Высота)')
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Продвинутый редактор 3D-поверхностей v2</title>
+    <!-- Подключаем библиотеку Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 1.5em;
+            background-color: #f0f2f5;
+            color: #333;
         }
-        # Устанавливаем значения в HTML-инпуты
-        js.document.getElementById('grid-points').value = self.settings['grid_points']
-        js.document.getElementById('min-val').value = self.settings['min_val']
-        js.document.getElementById('max-val').value = self.settings['max_val']
-        js.document.getElementById('x-axis-label').value = self.settings['x_label']
-        js.document.getElementById('z-axis-label').value = self.settings['z_label']
-        js.document.getElementById('y-axis-label').value = self.settings['y_label']
+        .container { max-width: 1600px; margin: auto; }
+        h1, h2 { text-align: center; color: #0056b3; }
+        details {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            margin-bottom: 1em;
+            padding: 0.5em 1em;
+            background-color: #fff;
+        }
+        summary { font-weight: bold; cursor: pointer; padding: 0.5em; color: #0056b3; }
+        .controls-panel, .export-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+            padding: 1em;
+            background-color: #fff;
+            border-radius: 8px;
+            margin-bottom: 1em;
+            border: 1px solid #ddd;
+        }
+        .control-group { display: flex; flex-direction: column; }
+        .control-group label { margin-bottom: 5px; font-size: 0.9em; color: #555; }
+        .control-group input[type="number"], .control-group input[type="text"] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 120px; }
+        .control-group input[type="text"] { width: 150px; }
+        .mode-switch { display: flex; gap: 10px; align-items: center; }
+        button { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; background-color: #007bff; color: white; transition: background-color 0.2s; }
+        button:hover { background-color: #0056b3; }
+        button.reset-btn { background-color: #dc3545; }
+        button.reset-btn:hover { background-color: #c82333; }
+        .plot-container { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 20px; margin-top: 20px; }
+        .plot-wrapper { display: flex; flex-direction: column; gap: 20px; }
+        .plot-2d { width: 500px; height: 350px; }
+        .plot-3d { width: 700px; height: 720px; }
 
-    def save_settings(self):
-        """Читает значения из виджетов и сохраняет в localStorage."""
-        self.settings['grid_points'] = int(js.document.getElementById('grid-points').value)
-        self.settings['min_val'] = float(js.document.getElementById('min-val').value)
-        self.settings['max_val'] = float(js.document.getElementById('max-val').value)
-        self.settings['x_label'] = js.document.getElementById('x-axis-label').value
-        self.settings['z_label'] = js.document.getElementById('z-axis-label').value
-        self.settings['y_label'] = js.document.getElementById('y-axis-label').value
+        .table-section { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; padding: 1em; }
+        .table-container { max-height: 400px; overflow-y: auto; border: 1px solid #ddd; }
+        table { border-collapse: collapse; width: 300px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        td input { width: 80%; border: 1px solid #ccc; text-align: center; padding: 4px;}
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Продвинутый редактор 3D-поверхностей</h1>
+
+        <details open>
+            <summary>Инструкция по использованию</summary>
+            <ul>
+                <li><strong>Переключение режимов:</strong> Используйте переключатель <strong>"Режим"</strong> в панели управления для выбора действия <strong>левой кнопки мыши (ЛКМ)</strong> на 2D-графиках.</li>
+                <li>   <strong>- Режим "Масштаб":</strong> ЛКМ позволяет масштабировать и перемещать (панорамировать) график.</li>
+                <li>   <strong>- Режим "Редактирование":</strong> ЛКМ позволяет перетаскивать точки профиля. Масштабирование в этом режиме отключено.</li>
+                <li><strong>Вращение 3D-графика:</strong> Всегда выполняется с помощью ЛКМ.</li>
+                <li><strong>Сохранение данных:</strong> Все настройки и <strong>измененные формы профилей</strong> автоматически сохраняются в кэше браузера.</li>
+                <li><strong>Сброс:</strong> Кнопка "Сбросить все настройки" удаляет все сохраненные данные, включая формы профилей, и возвращает страницу к исходному состоянию.</li>
+            </ul>
+        </details>
+
+        <details open>
+            <summary>Панель управления</summary>
+            <form id="controls-form">
+                <div class="controls-panel">
+                    <div class="control-group">
+                        <label>Режим 2D-графиков</label>
+                        <div class="mode-switch">
+                           <input type="radio" id="mode-zoom" name="interaction-mode" value="zoom" checked> <label for="mode-zoom">Масштаб</label>
+                           <input type="radio" id="mode-edit" name="interaction-mode" value="edit"> <label for="mode-edit">Редактирование</label>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="grid-points">Точек в сетке</label>
+                        <input type="number" id="grid-points" min="10" max="200" step="10">
+                    </div>
+                    <div class="control-group">
+                        <label for="min-val">Мин. значение X/Z</label>
+                        <input type="number" id="min-val">
+                    </div>
+                    <div class="control-group">
+                        <label for="max-val">Макс. значение X/Z</label>
+                        <input type="number" id="max-val">
+                    </div>
+                    <div class="control-group">
+                        <label for="title-x">Название оси X</label>
+                        <input type="text" id="title-x">
+                    </div>
+                    <div class="control-group">
+                        <label for="title-y">Название оси Y (Высота)</label>
+                        <input type="text" id="title-y">
+                    </div>
+                    <div class="control-group">
+                        <label for="title-z">Название оси Z</label>
+                        <input type="text" id="title-z">
+                    </div>
+                    <div class="control-group" style="justify-content: flex-end;">
+                         <button type="button" id="reset-button" class="reset-btn">Сбросить все настройки</button>
+                    </div>
+                </div>
+            </form>
+            <div class="export-panel">
+                 <button id="export-png">Экспорт в PNG</button>
+                 <button id="export-svg">Экспорт в SVG</button>
+                 <button id="export-pdf">Экспорт в PDF</button>
+            </div>
+        </details>
+
+        <div class="plot-container">
+            <div class="plot-wrapper">
+                <div id="plotX" class="plot-2d"></div>
+                <div id="plotZ" class="plot-2d"></div>
+            </div>
+            <div id="plot3D" class="plot-3d"></div>
+        </div>
         
-        for key, value in self.settings.items():
-            self.storage.set(key, str(value))
+        <details>
+            <summary>Табличные данные профилей</summary>
+            <div class="table-section">
+                <div class="table-container">
+                    <h3 style="text-align:center;">Профиль X-Y</h3>
+                    <table id="tableX"></table>
+                </div>
+                <div class="table-container">
+                    <h3 style="text-align:center;">Профиль Z-Y</h3>
+                    <table id="tableZ"></table>
+                </div>
+            </div>
+        </details>
 
-    def setup_event_listeners(self):
-        """Привязывает Python-функции к HTML-кнопкам."""
-        js.document.getElementById('apply-settings').addEventListener('click', self.handle_apply_settings)
-        js.document.getElementById('update-labels').addEventListener('click', self.handle_update_labels)
-        js.document.getElementById('update-from-tables').addEventListener('click', self.handle_update_from_tables)
-        js.document.getElementById('export-png').addEventListener('click', lambda e: self.export_figure('png'))
-        js.document.getElementById('export-svg').addEventListener('click', lambda e: self.export_figure('svg'))
-        js.document.getElementById('export-pdf').addEventListener('click', lambda e: self.export_figure('pdf'))
-        js.document.getElementById('reset-settings').addEventListener('click', self.handle_reset)
+    </div>
 
-    def rebuild_app(self):
-        """Полностью перестраивает графики с текущими настройками."""
-        self.cleanup_plots()
-        self.dragger = ProfileDragger(self.settings)
-        self.display_plots()
-        self.render_tables()
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- Глобальные переменные и константы ---
+        const HUMP_HEIGHT = 2.0;
+        const HUMP_WIDTH = 3.0;
 
-    def cleanup_plots(self):
-        """Очищает div'ы перед перерисовкой."""
-        js.document.getElementById('plot-x-div').innerHTML = ""
-        js.document.getElementById('plot-z-div').innerHTML = ""
-        js.document.getElementById('plot-3d-div').innerHTML = ""
-        plt.close('all') # Закрываем все фигуры matplotlib
+        const DEFAULTS = {
+            gridPoints: 100,
+            minVal: -10,
+            maxVal: 10,
+            titleX: 'Ось X',
+            titleY: 'Ось Y (Высота)',
+            titleZ: 'Ось Z',
+            // Теперь данные профилей тоже часть настроек
+            y_x_data: null,
+            y_z_data: null
+        };
 
-    def display_plots(self):
-        display(self.dragger.fig_x, target="plot-x-div")
-        display(self.dragger.fig_z, target="plot-z-div")
-        display(self.dragger.fig_3d, target="plot-3d-div")
+        let settings = { ...DEFAULTS };
 
-    def render_tables(self):
-        """Генерирует HTML для таблиц данных."""
-        def create_table_html(coords, data, prefix):
-            html = "<table><tr><th>Коорд.</th><th>Высота (Y)</th></tr>"
-            for i, (coord, val) in enumerate(zip(coords, data)):
-                html += f"<tr><td>{coord:.2f}</td><td><input type='number' step='0.1' id='{prefix}-{i}' value='{val:.2f}'></td></tr>"
-            html += "</table>"
-            return html
+        // --- DOM Элементы ---
+        const plotXDiv = document.getElementById('plotX');
+        const plotZDiv = document.getElementById('plotZ');
+        const plot3DDiv = document.getElementById('plot3D');
+        const controlsForm = document.getElementById('controls-form');
+        const tableXContainer = document.getElementById('tableX');
+        const tableZContainer = document.getElementById('tableZ');
 
-        x_html = create_table_html(self.dragger.x_data, self.dragger.y_x_data, 'table-x')
-        z_html = create_table_html(self.dragger.z_data, self.dragger.y_z_data, 'table-z')
-        js.document.getElementById('table-x-container').innerHTML = x_html
-        js.document.getElementById('table-z-container').innerHTML = z_html
+        // --- Данные ---
+        let x_data, z_data;
 
-    # --- Обработчики событий ---
-    def handle_apply_settings(self, event):
-        self.save_settings()
-        self.rebuild_app()
+        // --- Состояние интерактивности ---
+        let isDragging = false;
+        let currentMode = 'zoom';
 
-    def handle_update_labels(self, event):
-        self.save_settings()
-        self.dragger.update_labels(self.settings)
+        // --- JavaScript аналоги NumPy ---
+        const linspace = (start, stop, num) => {
+            const step = (stop - start) / (num - 1);
+            return Array.from({ length: num }, (_, i) => start + i * step);
+        };
+        const makeSingleHump = (coords) => {
+            const sigma = HUMP_WIDTH / (2 * Math.sqrt(2 * Math.log(2)));
+            const center = 0.0;
+            const sigmaSq2 = 2 * sigma ** 2;
+            return coords.map(coord => HUMP_HEIGHT * Math.exp(-((coord - center) ** 2) / sigmaSq2));
+        };
+        const outerProduct = (v1, v2) => v1.map(e1 => v2.map(e2 => e1 * e2));
 
-    def handle_update_from_tables(self, event):
-        try:
-            for i in range(len(self.dragger.y_x_data)):
-                val = float(js.document.getElementById(f'table-x-{i}').value)
-                self.dragger.y_x_data[i] = val
-            for i in range(len(self.dragger.y_z_data)):
-                val = float(js.document.getElementById(f'table-z-{i}').value)
-                self.dragger.y_z_data[i] = val
+        // --- Функции сохранения и загрузки ---
+        function saveState() {
+            // Сохраняем и настройки, и данные профилей
+            localStorage.setItem('surfacePlotState', JSON.stringify(settings));
+        }
+
+        function loadState() {
+            const saved = localStorage.getItem('surfacePlotState');
+            if (saved) {
+                // Загружаем сохраненное состояние
+                const savedSettings = JSON.parse(saved);
+                settings = { ...DEFAULTS, ...savedSettings };
+            }
+            // Обновляем поля ввода на форме
+            Object.keys(DEFAULTS).forEach(key => {
+                 if (key.startsWith('y_')) return; // не обновляем поля для данных
+                const inputId = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+                if (document.getElementById(inputId)) {
+                    document.getElementById(inputId).value = settings[key];
+                }
+            });
+        }
+
+        // --- Функции рендеринга и обновления ---
+        
+        function generateData() {
+            x_data = linspace(settings.minVal, settings.maxVal, settings.gridPoints);
+            z_data = linspace(settings.minVal, settings.maxVal, settings.gridPoints);
             
-            self.dragger.update_2d_plots_from_data()
-            self.dragger.update_3d_plot()
-        except Exception as e:
-            js.alert(f"Ошибка при чтении данных из таблицы: {e}")
-
-    def handle_reset(self, event):
-        self.storage.clear()
-        js.window.location.reload()
-
-    def export_figure(self, format):
-        """Сохраняет 3D-график и предлагает его скачать."""
-        buf = io.BytesIO()
-        self.dragger.fig_3d.savefig(buf, format=format, dpi=150, bbox_inches='tight')
-        buf.seek(0)
-        # JS-магия для скачивания файла
-        file_blob = js.Blob.new([buf.getvalue()], {type: f'image/{format}'})
-        link = js.document.createElement('a')
-        link.href = js.window.URL.createObjectURL(file_blob)
-        link.download = f'surface_plot_3d.{format}'
-        link.click()
-
-# Класс, управляющий логикой самих графиков
-class ProfileDragger:
-    def __init__(self, settings):
-        self.settings = settings
-        self.active_artist = None
-        self.active_index = None
-        
-        # Данные
-        self.x_data = np.linspace(settings['min_val'], settings['max_val'], settings['grid_points'])
-        self.z_data = np.linspace(settings['min_val'], settings['max_val'], settings['grid_points'])
-        
-        def make_single_hump(coords):
-            return 2.0 * np.exp(-((coords - (settings['min_val'] + settings['max_val']) / 2)**2) / (2 * ( (settings['max_val']-settings['min_val'])/6 )**2 ))
-        
-        self.y_x_data = make_single_hump(self.x_data)
-        self.y_z_data = make_single_hump(self.z_data)
-        self.X, self.Z = np.meshgrid(self.x_data, self.z_data)
-
-        # Фигуры
-        self.fig_x, self.ax_x = plt.subplots(figsize=(6, 4))
-        self.fig_z, self.ax_z = plt.subplots(figsize=(6, 4))
-        self.fig_3d = plt.figure(figsize=(6, 5))
-        self.ax_3d = self.fig_3d.add_subplot(111, projection='3d')
-        
-        # Отрисовка
-        self.line_x, = self.ax_x.plot(self.x_data, self.y_x_data, 'b-o', markersize=4)
-        self.line_z, = self.ax_z.plot(self.z_data, self.y_z_data, 'r-o', markersize=4)
-        
-        # Подключение событий Matplotlib
-        for fig in [self.fig_x, self.fig_z]:
-            fig.canvas.mpl_connect('button_press_event', self.on_press)
-            fig.canvas.mpl_connect('motion_notify_event', self.on_motion)
-            fig.canvas.mpl_connect('button_release_event', self.on_release)
-        
-        self.update_labels(settings)
-        self.update_3d_plot()
-
-    def update_labels(self, settings):
-        self.ax_x.set_title(f"Профиль по {settings['x_label']}")
-        self.ax_x.set_xlabel(settings['x_label'])
-        self.ax_x.set_ylabel(settings['y_label'])
-        self.ax_x.grid(True)
-        
-        self.ax_z.set_title(f"Профиль по {settings['z_label']}")
-        self.ax_z.set_xlabel(settings['z_label'])
-        self.ax_z.set_ylabel(settings['y_label'])
-        self.ax_z.grid(True)
-
-        self.ax_3d.set_xlabel(settings['x_label'])
-        self.ax_3d.set_ylabel(settings['z_label'])
-        self.ax_3d.set_zlabel(settings['y_label'])
-        
-        for fig in [self.fig_x, self.fig_z, self.fig_3d]:
-            fig.canvas.draw_idle()
-
-    def update_3d_plot(self):
-        # Сохраняем углы обзора камеры
-        view = (self.ax_3d.elev, self.ax_3d.azim) if self.ax_3d.has_data() else (30, -60)
-        self.ax_3d.clear()
-        
-        Y_3D = np.outer(self.y_x_data, self.y_z_data) / 2.0
-        self.ax_3d.plot_surface(self.X, self.Z, Y_3D.T, cmap='viridis', rstride=2, cstride=2)
-        
-        self.update_labels(self.settings) # Восстанавливаем подписи
-        self.ax_3d.view_init(elev=view[0], azim=view[1]) # Восстанавливаем камеру
-        self.fig_3d.canvas.draw_idle()
-
-    def update_2d_plots_from_data(self):
-        self.line_x.set_ydata(self.y_x_data)
-        self.line_z.set_ydata(self.y_z_data)
-        self.fig_x.canvas.draw_idle()
-        self.fig_z.canvas.draw_idle()
-
-    def on_press(self, event):
-        # Редактируем только по ПРАВОЙ кнопке мыши (button 3)
-        if event.button != 3 or event.inaxes is None:
-            return
+            // Загружаем сохраненные данные, если они существуют и подходят по размеру
+            if (settings.y_x_data && settings.y_x_data.length === settings.gridPoints) {
+                // Используем сохраненные данные
+            } else {
+                // Генерируем новые, если сохраненных нет или размер не совпадает
+                settings.y_x_data = makeSingleHump(x_data);
+            }
             
-        artist = self.line_x if event.inaxes == self.ax_x else self.line_z
-        x_coords, y_coords = artist.get_data()
-        distances = np.sqrt((x_coords - event.xdata)**2 + (y_coords - event.ydata)**2)
+            if (settings.y_z_data && settings.y_z_data.length === settings.gridPoints) {
+                // Используем сохраненные данные
+            } else {
+                settings.y_z_data = makeSingleHump(z_data);
+            }
+        }
+
+        function getLayouts() {
+            return {
+                layoutX: { title: `Профиль Y от X`, xaxis: { title: settings.titleX }, yaxis: { title: settings.titleY, range: [-1, HUMP_HEIGHT + 2] }, margin: { l: 50, r: 30, b: 50, t: 50 } },
+                layoutZ: { title: `Профиль Y от Z`, xaxis: { title: settings.titleZ }, yaxis: { title: settings.titleY, range: [-1, HUMP_HEIGHT + 2] }, margin: { l: 50, r: 30, b: 50, t: 50 } },
+                layout3D: { title: 'Итоговая 3D-поверхность', scene: { xaxis: { title: settings.titleX }, yaxis: { title: settings.titleZ }, zaxis: { title: settings.titleY, range: [-1, HUMP_HEIGHT + 2] } }, margin: { l: 0, r: 0, b: 0, t: 40 } }
+            };
+        }
+
+        function update3DPlot() {
+            const surfaceData = outerProduct(settings.y_z_data, settings.y_x_data);
+            const normalizedSurface = surfaceData.map(row => row.map(val => val / HUMP_HEIGHT));
+            const { layout3D } = getLayouts();
+            Plotly.react(plot3DDiv, [{ x: x_data, y: z_data, z: normalizedSurface, type: 'surface', colorscale: 'Viridis', cmin: -1, cmax: HUMP_HEIGHT }], layout3D);
+        }
         
-        if len(distances) > 0 and np.min(distances) < 0.5:
-            self.active_artist = artist
-            self.active_index = np.argmin(distances)
-
-    def on_motion(self, event):
-        if self.active_artist is None or event.inaxes is None:
-            return
+        function update2DPlot(plotDiv, xData, yData, layout, mode) {
+            const config = {
+                staticPlot: mode === 'edit', // Отключаем интерактивность Plotly в режиме редактирования
+                displayModeBar: false // Убираем стандартную панель инструментов Plotly
+            };
+            Plotly.react(plotDiv, [{ x: xData, y: yData, mode: 'lines+markers', marker: { size: 5, color: plotDiv === plotXDiv ? '#007bff' : '#dc3545' } }], layout, config);
+        }
         
-        y_data_arr = self.y_x_data if self.active_artist == self.line_x else self.y_z_data
-        y_data_arr[self.active_index] = event.ydata
-        self.active_artist.set_ydata(y_data_arr)
-        self.active_artist.figure.canvas.draw_idle()
+        function renderTables() {
+            const generateTableHTML = (axis, x_values, y_values) => `<thead><tr><th>${axis}</th><th>Y</th></tr></thead><tbody>${y_values.map((y, i) => `<tr><td>${x_values[i].toFixed(2)}</td><td><input type="number" step="0.1" value="${y.toFixed(3)}" data-index="${i}"></td></tr>`).join('')}</tbody>`;
+            tableXContainer.innerHTML = generateTableHTML(settings.titleX, x_data, settings.y_x_data);
+            tableZContainer.innerHTML = generateTableHTML(settings.titleZ, z_data, settings.y_z_data);
+        }
 
-    def on_release(self, event):
-        if self.active_artist and event.button == 3:
-            self.active_artist = None
-            self.active_index = None
-            self.update_3d_plot()
-            self.render_tables() # Обновляем таблицы после перетаскивания
+        function fullRedraw() {
+            generateData();
+            const { layoutX, layoutZ } = getLayouts();
+            update2DPlot(plotXDiv, x_data, settings.y_x_data, layoutX, currentMode);
+            update2DPlot(plotZDiv, z_data, settings.y_z_data, layoutZ, currentMode);
+            update3DPlot();
+            renderTables();
+        }
 
-# --- Запуск приложения ---
-try:
-    app = App()
-    js.document.getElementById('loading-overlay').style.display = 'none'
-except Exception as e:
-    js.console.error(f"Ошибка при инициализации приложения: {e}")
-    js.document.getElementById('loading-overlay').innerHTML = f"Произошла критическая ошибка: {e}"
+        // --- Обработчики событий ---
+
+        // Панель управления (кроме режима)
+        controlsForm.addEventListener('input', (e) => {
+            if (e.target.name === 'interaction-mode') return; // Режим обрабатывается отдельно
+            const inputId = e.target.id;
+            const camelCaseId = inputId.replace(/-([a-z])/g, g => g[1].toUpperCase());
+            let value = e.target.type === 'number' ? parseFloat(e.target.value) : e.target.value;
+            if (isNaN(value) && e.target.type === 'number') return;
+            // При изменении числа точек, сбрасываем данные профилей
+            if (camelCaseId === 'gridPoints') {
+                settings.y_x_data = null;
+                settings.y_z_data = null;
+            }
+            settings[camelCaseId] = value;
+            saveState();
+            fullRedraw();
+        });
+
+        // Переключение режимов
+        document.querySelectorAll('input[name="interaction-mode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                currentMode = e.target.value;
+                const { layoutX, layoutZ } = getLayouts();
+                // Перерисовываем 2D-графики с новой конфигурацией интерактивности
+                update2DPlot(plotXDiv, x_data, settings.y_x_data, layoutX, currentMode);
+                update2DPlot(plotZDiv, z_data, settings.y_z_data, layoutZ, currentMode);
+            });
+        });
+
+        // Кнопка сброса
+        document.getElementById('reset-button').addEventListener('click', () => {
+            if (confirm('Вы уверены, что хотите сбросить все настройки и данные профилей? Это действие нельзя отменить.')) {
+                localStorage.removeItem('surfacePlotState');
+                window.location.reload();
+            }
+        });
+        
+        // Экспорт
+        ['png', 'svg', 'pdf'].forEach(format => {
+            document.getElementById(`export-${format}`).addEventListener('click', () => Plotly.downloadImage(plot3DDiv, {format: format, width: 1200, height: 800, filename: `surface_plot`}));
+        });
+        
+        // Интерактивность перетаскивания
+        function setupPlotInteraction(plotDiv, dataArray) {
+            plotDiv.on('plotly_hover', (eventData) => {
+                if (!isDragging || currentMode !== 'edit' || !eventData.points.length) return;
+                
+                const pointIndex = eventData.points[0].pointNumber;
+                const newY = eventData.yvals[0];
+
+                dataArray[pointIndex] = Math.max(-1, Math.min(newY, HUMP_HEIGHT + 2));
+                
+                Plotly.restyle(plotDiv, { y: [dataArray] }, [0]);
+                
+                const tableInput = (plotDiv === plotXDiv ? tableXContainer : tableZContainer).querySelector(`input[data-index="${pointIndex}"]`);
+                if(tableInput) tableInput.value = dataArray[pointIndex].toFixed(3);
+            });
+        }
+        
+        window.addEventListener('mousedown', (e) => { if (e.button === 0 && currentMode === 'edit') isDragging = true; }); // ЛКМ
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 0 && isDragging) { // ЛКМ
+                isDragging = false;
+                update3DPlot();
+                saveState(); // Сохраняем состояние после изменения
+            }
+        });
+
+        // Таблицы
+        function setupTableInteraction(tableContainer, dataArray, plotDiv) {
+            tableContainer.addEventListener('input', (e) => {
+                if (e.target.tagName === 'INPUT') {
+                    const index = parseInt(e.target.dataset.index);
+                    const value = parseFloat(e.target.value);
+                    if (!isNaN(value)) {
+                        dataArray[index] = value;
+                        Plotly.restyle(plotDiv, { y: [dataArray] }, [0]);
+                        update3DPlot();
+                        saveState(); // Сохраняем состояние после изменения
+                    }
+                }
+            });
+        }
+
+        // --- Инициализация ---
+        function init() {
+            loadState();
+            fullRedraw();
+            setupPlotInteraction(plotXDiv, settings.y_x_data);
+            setupPlotInteraction(plotZDiv, settings.y_z_data);
+            setupTableInteraction(tableXContainer, settings.y_x_data, plotXDiv);
+            setupTableInteraction(tableZContainer, settings.y_z_data, plotZDiv);
+        }
+
+        init();
+    });
+    </script>
+</body>
+</html>
