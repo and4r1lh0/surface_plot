@@ -3,18 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Интерактивная 3D Поверхность (JS + Plotly.js)</title>
-    <!-- Подключаем библиотеку Plotly.js из CDN -->
+    <title>Продвинутый редактор 3D-поверхностей</title>
+    <!-- Подключаем библиотеку Plotly.js -->
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
             margin: 0;
-            padding: 1em;
-            background-color: #f8f9fa;
+            padding: 1.5em;
+            background-color: #f0f2f5;
+            color: #333;
         }
-        h1, p {
+        .container {
+            max-width: 1600px;
+            margin: auto;
+        }
+        h1, h2 {
             text-align: center;
+            color: #0056b3;
+        }
+        details {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            margin-bottom: 1em;
+            padding: 0.5em 1em;
+            background-color: #fff;
+        }
+        summary {
+            font-weight: bold;
+            cursor: pointer;
+            padding: 0.5em;
+            color: #0056b3;
+        }
+        .controls-panel, .export-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            padding: 1em;
+            background-color: #fff;
+            border-radius: 8px;
+            margin-bottom: 1em;
+            border: 1px solid #ddd;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .control-group label {
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            color: #555;
+        }
+        .control-group input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 120px;
+        }
+        .control-group input[type="text"] {
+            width: 150px;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button.reset-btn {
+            background-color: #dc3545;
+        }
+        button.reset-btn:hover {
+            background-color: #c82333;
         }
         .plot-container {
             display: flex;
@@ -22,173 +88,347 @@
             justify-content: center;
             align-items: flex-start;
             gap: 20px;
+            margin-top: 20px;
         }
-        .plot-wrapper {
+        .plot-wrapper { display: flex; flex-direction: column; gap: 20px; }
+        .plot-2d { width: 500px; height: 350px; }
+        .plot-3d { width: 700px; height: 720px; }
+
+        .table-section {
             display: flex;
-            flex-direction: column;
-            align-items: center;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            padding: 1em;
         }
-        .plot-2d {
-            width: 500px;
-            height: 350px;
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
         }
-        .plot-3d {
-            width: 700px;
-            height: 720px;
+        table {
+            border-collapse: collapse;
+            width: 300px;
         }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th { background-color: #f2f2f2; }
+        td input { width: 80%; border: 1px solid #ccc; text-align: center; padding: 4px;}
     </style>
 </head>
 
 <body>
+    <div class="container">
+        <h1>Продвинутый редактор 3D-поверхностей</h1>
 
-    <h1>Интерактивная 3D Поверхность</h1>
-    <p>Перетаскивайте точки на 2D-графиках для изменения 3D-поверхности</p>
+        <details open>
+            <summary>Инструкция по использованию</summary>
+            <ul>
+                <li><strong>Вращение и масштабирование:</strong> Используйте <strong>левую кнопку мыши (ЛКМ)</strong> для вращения 3D-графика и панорамирования 2D-графиков. Колесо мыши изменяет масштаб.</li>
+                <li><strong>Изменение профиля:</strong> Зажмите <strong>правую кнопку мыши (ПКМ)</strong> и перетаскивайте точки на 2D-графиках, чтобы изменить их форму. 3D-поверхность обновится автоматически после того, как вы отпустите кнопку.</li>
+                <li><strong>Панель "Настройки":</strong> Здесь вы можете изменить параметры сетки, диапазон осей и их названия. Все изменения применяются мгновенно.</li>
+                <li><strong>Сохранение настроек:</strong> Все значения из панели настроек автоматически сохраняются в кэше вашего браузера. При следующем визите страница откроется с вашими последними параметрами.</li>
+                <li><strong>Сброс:</strong> Кнопка "Сбросить все настройки" удаляет сохраненные данные и возвращает страницу к исходному состоянию.</li>
+                <li><strong>Экспорт:</strong> Используйте кнопки в панели "Экспорт", чтобы сохранить текущий вид 3D-поверхности в форматах PNG, SVG или PDF.</li>
+                <li><strong>Редактирование в таблице:</strong> В разделе "Табличные данные профилей" можно точно задать Y-значения для каждой точки. Просто измените число в ячейке, и графики обновятся.</li>
+            </ul>
+        </details>
 
-    <div class="plot-container">
-        <div class="plot-wrapper">
-            <!-- Контейнеры для 2D-графиков -->
-            <div id="plotX" class="plot-2d"></div>
-            <div id="plotZ" class="plot-2d"></div>
+        <details open>
+            <summary>Панель управления</summary>
+            <form id="controls-form">
+                <div class="controls-panel">
+                    <div class="control-group">
+                        <label for="grid-points">Точек в сетке</label>
+                        <input type="number" id="grid-points" min="10" max="200" step="10">
+                    </div>
+                    <div class="control-group">
+                        <label for="min-val">Мин. значение X/Z</label>
+                        <input type="number" id="min-val">
+                    </div>
+                    <div class="control-group">
+                        <label for="max-val">Макс. значение X/Z</label>
+                        <input type="number" id="max-val">
+                    </div>
+                    <div class="control-group">
+                        <label for="title-x">Название оси X</label>
+                        <input type="text" id="title-x">
+                    </div>
+                    <div class="control-group">
+                        <label for="title-y">Название оси Y (Высота)</label>
+                        <input type="text" id="title-y">
+                    </div>
+                    <div class="control-group">
+                        <label for="title-z">Название оси Z</label>
+                        <input type="text" id="title-z">
+                    </div>
+                    <div class="control-group" style="justify-content: flex-end;">
+                         <button type="button" id="reset-button" class="reset-btn">Сбросить все настройки</button>
+                    </div>
+                </div>
+            </form>
+            <div class="export-panel">
+                 <button id="export-png">Экспорт в PNG</button>
+                 <button id="export-svg">Экспорт в SVG</button>
+                 <button id="export-pdf">Экспорт в PDF</button>
+            </div>
+        </details>
+
+        <div class="plot-container">
+            <div class="plot-wrapper">
+                <div id="plotX" class="plot-2d"></div>
+                <div id="plotZ" class="plot-2d"></div>
+            </div>
+            <div id="plot3D" class="plot-3d"></div>
         </div>
-        <!-- Контейнер для 3D-графика -->
-        <div id="plot3D" class="plot-3d"></div>
+        
+        <details>
+            <summary>Табличные данные профилей</summary>
+            <div class="table-section">
+                <div class="table-container">
+                    <h3 style="text-align:center;">Профиль X-Y</h3>
+                    <table id="tableX"></table>
+                </div>
+                <div class="table-container">
+                    <h3 style="text-align:center;">Профиль Z-Y</h3>
+                    <table id="tableZ"></table>
+                </div>
+            </div>
+        </details>
+
     </div>
 
     <script>
-    // --- Глобальные параметры (аналогично Python) ---
-    const GRID_POINTS = 100;
-    const HUMP_HEIGHT = 2.0;
-    const HUMP_WIDTH = 3.0;
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- Глобальные переменные и константы ---
+        const HUMP_HEIGHT = 2.0;
+        const HUMP_WIDTH = 3.0;
 
-    // --- JavaScript-аналоги функций NumPy ---
+        const DEFAULTS = {
+            gridPoints: 100,
+            minVal: -10,
+            maxVal: 10,
+            titleX: 'Ось X',
+            titleY: 'Ось Y (Высота)',
+            titleZ: 'Ось Z'
+        };
 
-    /**
-     * Создает массив чисел в заданном диапазоне (аналог np.linspace).
-     */
-    function linspace(start, stop, num) {
-        const step = (stop - start) / (num - 1);
-        return Array.from({ length: num }, (_, i) => start + i * step);
-    }
+        let settings = { ...DEFAULTS };
 
-    /**
-     * Создает гауссовский горб (аналог make_single_hump).
-     */
-    function makeSingleHump(coords) {
-        const sigma = HUMP_WIDTH / (2 * Math.sqrt(2 * Math.log(2)));
-        const center = 0.0;
-        const sigmaSq2 = 2 * sigma ** 2;
-        return coords.map(coord => HUMP_HEIGHT * Math.exp(-((coord - center) ** 2) / sigmaSq2));
-    }
+        // --- DOM Элементы ---
+        const plotXDiv = document.getElementById('plotX');
+        const plotZDiv = document.getElementById('plotZ');
+        const plot3DDiv = document.getElementById('plot3D');
+        const controlsForm = document.getElementById('controls-form');
+        const tableXContainer = document.getElementById('tableX');
+        const tableZContainer = document.getElementById('tableZ');
 
-    /**
-     * Вычисляет внешнее произведение двух векторов для создания поверхности (аналог np.outer).
-     */
-    function outerProduct(v1, v2) {
-        return v1.map(e1 => v2.map(e2 => e1 * e2));
-    }
+        // --- Данные ---
+        let x_data, z_data, y_x_data, y_z_data;
 
-    // --- Исходные данные ---
-    const x_data = linspace(-10, 10, GRID_POINTS);
-    const z_data = linspace(-10, 10, GRID_POINTS);
-    let y_x_data = makeSingleHump(x_data);
-    let y_z_data = makeSingleHump(z_data);
+        // --- Состояние интерактивности ---
+        let isDragging = false;
 
-    // --- Получаем ссылки на DOM-элементы ---
-    const plotXDiv = document.getElementById('plotX');
-    const plotZDiv = document.getElementById('plotZ');
-    const plot3DDiv = document.getElementById('plot3D');
+        // --- JavaScript аналоги NumPy ---
+        const linspace = (start, stop, num) => {
+            const step = (stop - start) / (num - 1);
+            return Array.from({ length: num }, (_, i) => start + i * step);
+        };
+        const makeSingleHump = (coords) => {
+            const sigma = HUMP_WIDTH / (2 * Math.sqrt(2 * Math.log(2)));
+            const center = 0.0;
+            const sigmaSq2 = 2 * sigma ** 2;
+            return coords.map(coord => HUMP_HEIGHT * Math.exp(-((coord - center) ** 2) / sigmaSq2));
+        };
+        const outerProduct = (v1, v2) => v1.map(e1 => v2.map(e2 => e1 * e2));
 
-    // --- Определяем макеты (layout) для графиков ---
-    const layoutX = {
-        title: 'Профиль по оси X (Y от X)',
-        xaxis: { title: 'X' },
-        yaxis: { title: 'Y', range: [-1, HUMP_HEIGHT + 2] },
-        margin: { l: 50, r: 30, b: 50, t: 50 }
-    };
+        // --- Функции сохранения и загрузки настроек ---
+        function saveSettings() {
+            localStorage.setItem('surfacePlotSettings', JSON.stringify(settings));
+        }
 
-    const layoutZ = {
-        title: 'Профиль по оси Z (Y от Z)',
-        xaxis: { title: 'Z' },
-        yaxis: { title: 'Y', range: [-1, HUMP_HEIGHT + 2] },
-        margin: { l: 50, r: 30, b: 50, t: 50 }
-    };
+        function loadSettings() {
+            const saved = localStorage.getItem('surfacePlotSettings');
+            if (saved) {
+                settings = { ...DEFAULTS, ...JSON.parse(saved) };
+            }
+            // Обновляем поля ввода на форме
+            Object.keys(DEFAULTS).forEach(key => {
+                const inputId = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+                document.getElementById(inputId).value = settings[key];
+            });
+        }
 
-    const layout3D = {
-        title: 'Итоговая 3D-поверхность',
-        scene: {
-            xaxis: { title: 'Ось X' },
-            yaxis: { title: 'Ось Z' },
-            zaxis: { title: 'Ось Y (Высота)', range: [-1, HUMP_HEIGHT + 2] }
-        },
-        margin: { l: 0, r: 0, b: 0, t: 40 }
-    };
-    
-    // --- Функция обновления 3D-поверхности ---
-    function update3DPlot() {
-        const surfaceData = outerProduct(y_z_data, y_x_data);
-        const normalizedSurface = surfaceData.map(row => row.map(val => val / HUMP_HEIGHT));
+        // --- Функции рендеринга и обновления ---
+        
+        function generateData() {
+            x_data = linspace(settings.minVal, settings.maxVal, settings.gridPoints);
+            z_data = linspace(settings.minVal, settings.maxVal, settings.gridPoints);
+            y_x_data = makeSingleHump(x_data);
+            y_z_data = makeSingleHump(z_data);
+        }
 
-        // Используем Plotly.react для эффективного обновления данных без полной перерисовки
-        Plotly.react(plot3DDiv, [{
-            x: x_data,
-            y: z_data,
-            z: normalizedSurface,
-            type: 'surface',
-            colorscale: 'Viridis',
-            cmin: -1,
-            cmax: HUMP_HEIGHT
-        }], layout3D);
-    }
+        function getLayouts() {
+            const layoutX = {
+                title: `Профиль Y от X`,
+                xaxis: { title: settings.titleX },
+                yaxis: { title: settings.titleY, range: [-1, HUMP_HEIGHT + 2] },
+                margin: { l: 50, r: 30, b: 50, t: 50 }
+            };
+            const layoutZ = {
+                title: `Профиль Y от Z`,
+                xaxis: { title: settings.titleZ },
+                yaxis: { title: settings.titleY, range: [-1, HUMP_HEIGHT + 2] },
+                margin: { l: 50, r: 30, b: 50, t: 50 }
+            };
+            const layout3D = {
+                title: 'Итоговая 3D-поверхность',
+                scene: {
+                    xaxis: { title: settings.titleX },
+                    yaxis: { title: settings.titleZ },
+                    zaxis: { title: settings.titleY, range: [-1, HUMP_HEIGHT + 2] }
+                },
+                margin: { l: 0, r: 0, b: 0, t: 40 }
+            };
+            return { layoutX, layoutZ, layout3D };
+        }
 
-    // --- Первичная отрисовка всех графиков ---
-    Plotly.newPlot(plotXDiv, [{ x: x_data, y: y_x_data, mode: 'lines+markers', marker: {size: 5} }], layoutX);
-    Plotly.newPlot(plotZDiv, [{ x: z_data, y: y_z_data, mode: 'lines+markers', marker: {size: 5, color: 'red'} }], layoutZ);
-    update3DPlot(); // Первичная отрисовка 3D-графика
+        function update3DPlot() {
+            const surfaceData = outerProduct(y_z_data, y_x_data);
+            const normalizedSurface = surfaceData.map(row => row.map(val => val / HUMP_HEIGHT));
+            const { layout3D } = getLayouts();
 
-    // --- Логика интерактивного перетаскивания ---
-    let isDragging = false;
+            Plotly.react(plot3DDiv, [{
+                x: x_data,
+                y: z_data,
+                z: normalizedSurface,
+                type: 'surface',
+                colorscale: 'Viridis',
+                cmin: -1,
+                cmax: HUMP_HEIGHT
+            }], layout3D);
+        }
+        
+        function update2DPlot(plotDiv, xData, yData, layout) {
+             Plotly.react(plotDiv, [{ x: xData, y: yData, mode: 'lines+markers', marker: { size: 5, color: plotDiv === plotXDiv ? '#007bff' : '#dc3545' } }], layout);
+        }
+        
+        function renderTables() {
+            const generateTableHTML = (axis, x_values, y_values) => {
+                let html = `<thead><tr><th>${axis}</th><th>Y</th></tr></thead><tbody>`;
+                html += y_values.map((y, i) => `
+                    <tr>
+                        <td>${x_values[i].toFixed(2)}</td>
+                        <td><input type="number" step="0.1" value="${y.toFixed(3)}" data-index="${i}"></td>
+                    </tr>
+                `).join('');
+                html += '</tbody>';
+                return html;
+            };
+            tableXContainer.innerHTML = generateTableHTML(settings.titleX, x_data, y_x_data);
+            tableZContainer.innerHTML = generateTableHTML(settings.titleZ, z_data, y_z_data);
+        }
 
-    // Функция-обработчик для обновления 2D-точек
-    function handleInteraction(eventData, plotDiv, dataArray, plotType) {
-        // eventData содержит информацию о событии, включая координаты точки
-        if (!eventData || !eventData.points || eventData.points.length === 0) return;
-
-        // Находим индекс ближайшей точки и новую y-координату курсора
-        const pointIndex = eventData.points[0].pointNumber;
-        const newY = eventData.yvals[0];
-
-        // Ограничиваем перемещение по оси Y
-        dataArray[pointIndex] = Math.max(-1, Math.min(newY, HUMP_HEIGHT + 2));
-
-        // Обновляем только y-координаты на 2D-графике. Это очень быстро.
-        Plotly.restyle(plotDiv, { y: [dataArray] }, [0]);
-    }
-
-    // Глобальные слушатели мыши для отслеживания состояния перетаскивания
-    window.addEventListener('mousedown', () => { isDragging = true; });
-    window.addEventListener('mouseup', () => {
-        if (isDragging) {
-            isDragging = false;
-            // Обновляем 3D-график только после того, как отпустили кнопку мыши
+        function fullRedraw() {
+            generateData();
+            const { layoutX, layoutZ } = getLayouts();
+            update2DPlot(plotXDiv, x_data, y_x_data, layoutX);
+            update2DPlot(plotZDiv, z_data, y_z_data, layoutZ);
             update3DPlot();
+            renderTables();
         }
-    });
 
-    // Вешаем обработчики событий на 2D-графики
-    plotXDiv.on('plotly_click', (d) => handleInteraction(d, plotXDiv, y_x_data, 'X'));
-    plotXDiv.on('plotly_hover', (d) => {
-        if (isDragging) {
-            handleInteraction(d, plotXDiv, y_x_data, 'X');
+
+        // --- Обработчики событий ---
+
+        // Панель управления
+        controlsForm.addEventListener('input', (e) => {
+            const inputId = e.target.id;
+            const camelCaseId = inputId.replace(/-([a-z])/g, g => g[1].toUpperCase());
+            
+            let value = e.target.type === 'number' ? parseFloat(e.target.value) : e.target.value;
+            if (isNaN(value) && e.target.type === 'number') return; // Игнорировать некорректный ввод
+            
+            settings[camelCaseId] = value;
+            saveSettings();
+            fullRedraw();
+        });
+
+        // Кнопка сброса
+        document.getElementById('reset-button').addEventListener('click', () => {
+            if (confirm('Вы уверены, что хотите сбросить все настройки? Это действие нельзя отменить.')) {
+                localStorage.removeItem('surfacePlotSettings');
+                window.location.reload();
+            }
+        });
+
+        // Экспорт
+        document.getElementById('export-png').addEventListener('click', () => Plotly.downloadImage(plot3DDiv, {format: 'png', width: 1200, height: 800, filename: 'surface_plot'}));
+        document.getElementById('export-svg').addEventListener('click', () => Plotly.downloadImage(plot3DDiv, {format: 'svg', width: 1200, height: 800, filename: 'surface_plot'}));
+        document.getElementById('export-pdf').addEventListener('click', () => Plotly.downloadImage(plot3DDiv, {format: 'pdf', width: 1200, height: 800, filename: 'surface_plot'}));
+
+
+        // Интерактивность графиков
+        function setupPlotInteraction(plotDiv, dataArray, xData) {
+            plotDiv.oncontextmenu = (e) => e.preventDefault(); // Отключить контекстное меню
+
+            plotDiv.on('plotly_hover', (eventData) => {
+                if (!isDragging || !eventData.points.length) return;
+                
+                const pointIndex = eventData.points[0].pointNumber;
+                const newY = eventData.yvals[0];
+
+                dataArray[pointIndex] = Math.max(-1, Math.min(newY, HUMP_HEIGHT + 2));
+                
+                // Быстрое обновление только Y-данных без перерисовки всего макета
+                Plotly.restyle(plotDiv, { y: [dataArray] }, [0]);
+                
+                // Обновление значения в таблице
+                const tableInput = plotDiv === plotXDiv
+                    ? tableXContainer.querySelector(`input[data-index="${pointIndex}"]`)
+                    : tableZContainer.querySelector(`input[data-index="${pointIndex}"]`);
+                if(tableInput) tableInput.value = dataArray[pointIndex].toFixed(3);
+            });
         }
-    });
+        
+        window.addEventListener('mousedown', (e) => { if (e.button === 2) isDragging = true; });
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 2 && isDragging) {
+                isDragging = false;
+                update3DPlot(); // Обновляем 3D только после завершения перетаскивания
+            }
+        });
 
-    plotZDiv.on('plotly_click', (d) => handleInteraction(d, plotZDiv, y_z_data, 'Z'));
-    plotZDiv.on('plotly_hover', (d) => {
-        if (isDragging) {
-            handleInteraction(d, plotZDiv, y_z_data, 'Z');
+        // Таблицы
+        function setupTableInteraction(tableContainer, dataArray, plotDiv) {
+            tableContainer.addEventListener('input', (e) => {
+                if (e.target.tagName === 'INPUT') {
+                    const index = parseInt(e.target.dataset.index);
+                    const value = parseFloat(e.target.value);
+                    if (!isNaN(value)) {
+                        dataArray[index] = value;
+                        Plotly.restyle(plotDiv, { y: [dataArray] }, [0]);
+                        update3DPlot();
+                    }
+                }
+            });
         }
-    });
 
+        // --- Инициализация ---
+        function init() {
+            loadSettings();
+            fullRedraw();
+            setupPlotInteraction(plotXDiv, y_x_data, x_data);
+            setupPlotInteraction(plotZDiv, y_z_data, z_data);
+            setupTableInteraction(tableXContainer, y_x_data, plotXDiv);
+            setupTableInteraction(tableZContainer, y_z_data, plotZDiv);
+        }
+
+        init();
+    });
     </script>
 </body>
 </html>
