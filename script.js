@@ -4,8 +4,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const STORAGE_KEY = 'surfacePlotState';
     const MAX_GRID_POINTS = 500;
 
-    const PLOT_CONFIG_2D = { displayModeBar: false, scrollZoom: false, dragmode: 'zoom' };
-    const PLOT_CONFIG_3D = { displayModeBar: false };
+    const PLOT_CONFIG_2D = { displayModeBar: false, scrollZoom: false, dragmode: 'zoom', locale: 'ru' };
+    const PLOT_CONFIG_3D = { displayModeBar: false, locale: 'ru' };
 
     const DEFAULTS = {
         gridPoints: 40, minVal: 0, maxVal: 10,
@@ -127,23 +127,42 @@ document.addEventListener('DOMContentLoaded', function() {
         saveState();
     }
 
-    controlsForm.addEventListener('input', (e) => {
-        const inputId = e.target.id;
-        const camelCaseId = inputId.replace(/-([a-z])/g, g => g[1].toUpperCase());
-        let value = e.target.type === 'number' ? parseFloat(e.target.value) : e.target.value;
-        if (isNaN(value) && e.target.type === 'number') return;
+    const heavyControls = ['grid-points', 'min-val', 'max-val'];
+    controlsForm.addEventListener('change', (e) => {
+        if (!heavyControls.includes(e.target.id)) return;
 
-        if (inputId === 'grid-points' && value > MAX_GRID_POINTS) {
-            value = MAX_GRID_POINTS;
-            e.target.value = MAX_GRID_POINTS;
+        const input = e.target;
+        const camelCaseId = input.id.replace(/-([a-z])/g, g => g[1].toUpperCase());
+        let value = parseFloat(input.value);
+
+        if (isNaN(value)) {
+            input.value = settings[camelCaseId];
+            return;
         }
 
-        const needsDataReset = ['gridPoints', 'minVal', 'maxVal'].includes(camelCaseId);
-        if (needsDataReset) { y_x_data = null; y_z_data = null; }
-
+        if (input.id === 'grid-points') {
+            if (value > MAX_GRID_POINTS) value = MAX_GRID_POINTS;
+            if (value < 2) value = 2;
+            input.value = value;
+        }
+        
+        y_x_data = null; 
+        y_z_data = null; 
+        
         settings[camelCaseId] = value;
         fullRedraw();
         saveState();
+    });
+
+
+    const lightControls = ['title-x', 'title-y', 'title-z'];
+    controlsForm.addEventListener('input', (e) => {
+        if (!lightControls.includes(e.target.id)) return;
+        
+        const camelCaseId = e.target.id.replace(/-([a-z])/g, g => g[1].toUpperCase());
+        settings[camelCaseId] = e.target.value;
+
+        updateAllLayoutsAndSave();
     });
 
     document.getElementById('reset-button').addEventListener('click', () => {
