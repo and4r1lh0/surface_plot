@@ -166,7 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     document.getElementById('reset-button').addEventListener('click', () => {
-        if (confirm('Вы уверены, что хотите сбросить все настройки и данные профилей?')) {
+        if (confirm('Вы уверены, что хотите сбросить все настройки?')) {
             localStorage.removeItem(STORAGE_KEY);
             window.location.reload();
         }
