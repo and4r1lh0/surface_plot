@@ -4,44 +4,179 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Интерактивная 3D Поверхность</title>
-    
-    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
-    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
-
-    <py-config>
-        packages = ["numpy", "matplotlib"]
-    </py-config>
-
+    <!-- Загружаем Pyodide -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f9; }
-        h1 { text-align: center; color: #333; }
-        .container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
-        .plot-area { flex: 1; min-width: 450px; padding: 10px; background-color: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        #loading-message { text-align: center; font-size: 1.2em; color: #555; padding: 20px; }
+        body { font-family: sans-serif; text-align: center; margin: 1em; }
+        #loading-message { font-size: 1.2em; color: #555; }
+        #plot-container { margin-top: 20px; }
     </style>
-    <script>
-        document.addEventListener('py:ready', () => {
-            const loadingMsg = document.getElementById('loading-message');
-            loadingMsg.innerHTML = "Библиотеки загружены. Запускаем приложение...";
-        });
-    </script>
 </head>
 <body>
-    <h1>Интерактивный 3D-скульптор</h1>
-    <p style="text-align: center;">Перетаскивайте точки на 2D-графиках, чтобы изменить 3D-поверхность. <b>Первая загрузка может занять до минуты.</b></p>
+    <h1>Интерактивная 3D Поверхность</h1>
+    <p id="loading-message">Загрузка Python и библиотек... Пожалуйста, подождите.</p>
+    <!-- Сюда Matplotlib будет отрисовывать график -->
+    <div id="plot-container"></div>
+
+    <script type="text/javascript">
+        // Основной асинхронный скрипт для запуска Pyodide
+        async function main() {
+            // 1. Инициализация Pyodide
+            let pyodide = await loadPyodide();
+            
+            // Сообщаем пользователю о загрузке пакетов
+            document.getElementById('loading-message').innerText = 'Загрузка NumPy и Matplotlib...';
+
+            // 2. Установка необходимых Python-пакетов
+            await pyodide.loadPackage(["numpy", "matplotlib"]);
+            
+            // Убираем сообщение о загрузке
+            document.getElementById('loading-message').style.display = 'none';
+
+            // 3. Ваш Python-код, помещенный в многострочную строку JavaScript
+            const pythonCode = `
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+
+# --- ВАЖНО: Устанавливаем бэкенд для работы в браузере ---
+matplotlib.use('module://matplotlib_pyodide.html5_canvas_backend')
+
+# --- Параметры ---
+GRID_POINTS = 100   # Количество точек в сетке
+HUMP_HEIGHT = 2.0   # Начальная высота горба
+HUMP_WIDTH = 3.0    # Начальная ширина горба
+
+class ProfileDragger:
+    """
+    Класс для интерактивного управления 2D-профилями и обновления 3D-поверхности.
+    """
+    def __init__(self):
+        # 1. --- Создание исходных данных ---
+        self.x_data = np.linspace(-10, 10, GRID_POINTS)
+        self.z_data = np.linspace(-10, 10, GRID_POINTS)
+
+        def make_single_hump(coords):
+            """Создает один гауссовский горб с центром в 0."""
+            sigma = HUMP_WIDTH / (2 * np.sqrt(2 * np.log(2)))
+            center = 0.0
+            hump = HUMP_HEIGHT * np.exp(-((coords - center)**2) / (2 * sigma**2))
+            return hump
+
+        self.y_x_data = make_single_hump(self.x_data)
+        self.y_z_data = make_single_hump(self.z_data)
+        
+        self.X, self.Z = np.meshgrid(self.x_data, self.z_data)
+
+        # 2. --- Настройка окна и графиков ---
+        self.fig = plt.figure(figsize=(15, 7))
+        self.fig.suptitle('Перетаскивайте точки на 2D-графиках для изменения 3D-поверхности', fontsize=16)
+
+        self.ax_x = self.fig.add_subplot(2, 2, 1)
+        self.ax_z = self.fig.add_subplot(2, 2, 3)
+        self.ax_3d = self.fig.add_subplot(1, 2, 2, projection='3d')
+        
+        # 3. --- Первичная отрисовка ---
+        self.line_x, = self.ax_x.plot(self.x_data, self.y_x_data, 'b-o', markersize=4, picker=5)
+        self.line_z, = self.ax_z.plot(self.z_data, self.y_z_data, 'r-o', markersize=4, picker=5)
+        self.setup_2d_axes()
+        
+        self.update_3d_plot()
+
+        # 4. --- Управление состоянием интерактивности ---
+        self.active_artist = None
+        self.active_index = None
+        
+        # 5. --- Подключение обработчиков событий ---
+        self.fig.canvas.mpl_connect('button_press_event', self.on_press)
+        self.fig.canvas.mpl_connect('motion_notify_event', self.on_motion)
+        self.fig.canvas.mpl_connect('button_release_event', self.on_release)
+
+    def setup_2d_axes(self):
+        self.ax_x.set_title('Профиль по оси X (Y от X)')
+        self.ax_x.set_ylabel('Y')
+        self.ax_x.grid(True)
+        self.ax_x.set_ylim(-1, HUMP_HEIGHT + 2)
+
+        self.ax_z.set_title('Профиль по оси Z (Y от Z)')
+        self.ax_z.set_xlabel('Z')
+        self.ax_z.set_ylabel('Y')
+        self.ax_z.grid(True)
+        self.ax_z.set_ylim(-1, HUMP_HEIGHT + 2)
+
+    def update_3d_plot(self):
+        self.ax_3d.clear()
+        Y_3D = np.outer(self.y_x_data, self.y_z_data) / HUMP_HEIGHT
+        
+        self.ax_3d.plot_surface(self.X, self.Z, Y_3D.T, cmap='viridis', rstride=4, cstride=4)
+        
+        self.ax_3d.set_title('Итоговая 3D-поверхность')
+        self.ax_3d.set_xlabel('Ось X')
+        self.ax_3d.set_ylabel('Ось Z')
+        self.ax_3d.set_zlabel('Ось Y (Высота)')
+        self.ax_3d.set_zlim(-1, HUMP_HEIGHT + 2)
+        
+        self.fig.canvas.draw_idle()
+
+    def on_press(self, event):
+        if event.inaxes not in [self.ax_x, self.ax_z]:
+            return
+            
+        artist = self.line_x if event.inaxes == self.ax_x else self.line_z
+        # Проверка, содержит ли событие нужные атрибуты
+        if event.xdata is None or event.ydata is None:
+            return
+
+        x_coords, y_coords = artist.get_data()
+        distances = np.sqrt((x_coords - event.xdata)**2 + (y_coords - event.ydata)**2)
+        
+        # Порог захвата точки можно подбирать
+        if distances.min() < 0.5:
+            self.active_artist = artist
+            self.active_index = np.argmin(distances)
     
-    <div id="loading-message">
-      Загрузка Python и библиотек... Пожалуйста, подождите.
-    </div>
+    def on_motion(self, event):
+        if self.active_artist is None or event.inaxes != self.active_artist.axes or event.ydata is None:
+            return
 
-    <div class="container" style="visibility: hidden;" id="main-container">
-        <div class="plot-area" id="plot-x-div"></div>
-        <div class="plot-area" id="plot-z-div"></div>
-        <div class.plot-area" id="plot-3d-div"></div>
-    </div>
+        new_y = event.ydata
+        
+        if self.active_artist == self.line_x:
+            self.y_x_data[self.active_index] = new_y
+            self.line_x.set_ydata(self.y_x_data)
+        else:
+            self.y_z_data[self.active_index] = new_y
+            self.line_z.set_ydata(self.y_z_data)
+            
+        self.fig.canvas.draw_idle()
 
-    <!-- <<< ИЗМЕНЕНИЕ ЗДЕСЬ: Подключаем внешний Python-скрипт >>> -->
-    <py-script src="./main.py"></py-script>
+    def on_release(self, event):
+        if self.active_artist is not None:
+            self.active_artist = None
+            self.active_index = None
+            self.update_3d_plot()
 
+# --- Запуск программы ---
+dragger = ProfileDragger()
+
+# --- ВАЖНО: plt.show() не нужен, Pyodide отобразит график автоматически ---
+# plt.show()
+
+# Отображаем фигуру в указанном div
+plt.get_current_fig_manager().canvas.show()
+`;
+
+            // 4. Запускаем Python-код
+            try {
+                await pyodide.runPythonAsync(pythonCode);
+            } catch (err) {
+                console.error(err);
+                document.getElementById('plot-container').innerText = 'Произошла ошибка при выполнении Python-кода. Подробности в консоли браузера.';
+            }
+        }
+
+        // Вызываем нашу главную функцию
+        main();
+    </script>
 </body>
 </html>
