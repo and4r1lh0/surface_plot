@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D поверхность</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <form id="controls-form">
+            <div class="controls-panel">
+                <div class="control-group"><label for="grid-points">Количество точек</label><input type="number" id="grid-points" min="10" max="500" step="10"></div>
+                <div class="control-group"><label for="min-val">Мин. значение X/Z</label><input type="number" id="min-val"></div>
+                <div class="control-group"><label for="max-val">Макс. значение X/Z</label><input type="number" id="max-val"></div>
+                <div class="control-group"><label for="title-x">Название оси X</label><input type="text" id="title-x"></div>
+                <div class="control-group"><label for="title-y">Название оси Y</label><input type="text" id="title-y"></div>
+                <div class="control-group"><label for="title-z">Название оси Z</label><input type="text" id="title-z"></div>
+                <div class="control-group" style="justify-content: flex-end;"><button type="button" id="reset-button" class="reset-btn">Сбросить всё</button></div>
+            </div>
+        </form>
+
+        <div class="plot-container">
+            <div class="plot-column">
+                <div class="plot-wrapper"><div class="plot-export-buttons"><button data-plot-id="plotX" data-format="png">PNG</button><button data-plot-id="plotX" data-format="svg">SVG</button></div><div id="plotX" class="plot-2d"></div></div>
+                <div class="plot-wrapper"><div class="plot-export-buttons"><button data-plot-id="plotZ" data-format="png">PNG</button><button data-plot-id="plotZ" data-format="svg">SVG</button></div><div id="plotZ" class="plot-2d"></div></div>
+            </div>
+            <div class="plot-wrapper"><div class="plot-export-buttons"><button data-plot-id="plot3D" data-format="png">PNG</button><button data-plot-id="plot3D" data-format="svg">SVG</button></div><div id="plot3D" class="plot-3d"></div></div>
+        </div>
+        
+        <div class="table-section">
+            <div id="tableWrapperX" class="table-container"></div>
+            <div id="tableWrapperZ" class="table-container"></div>
+        </div>
+    </div>
+
+    <footer>
+        © 2025 Developed by <a href="https://github.com/and4r1lh0" target="_blank" rel="noopener noreferrer">and4r1lh0</a> | 
+        Powered by <a href="https://github.com/plotly/plotly.py" target="_blank" rel="noopener noreferrer">Plotly</a>
+    </footer>
+
+    <script src="script.js" defer></script>
+</body>
+</html>
