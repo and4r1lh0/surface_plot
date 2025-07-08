@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Интерактивная 3D Поверхность</title>
+    
+    <!-- Подключаем стили и ядро PyScript -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+
+    <!-- Предзагрузка необходимых пакетов для Python -->
+    <py-config>
+        packages = ["numpy", "matplotlib"]
+    </py-config>
+
+    <style>
+        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f9; }
+        h1 { text-align: center; color: #333; }
+        .container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+        .plot-area { flex: 1; min-width: 450px; padding: 10px; background-color: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        #loading-message { text-align: center; font-size: 1.2em; color: #555; padding: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Интерактивный 3D-скульптор</h1>
+    <p style="text-align: center;">Перетаскивайте точки на 2D-графиках, чтобы изменить 3D-поверхность. <b>Первая загрузка может занять до минуты.</b></p>
+    
+    <div id="loading-message">
+      Загрузка Python и библиотек... Пожалуйста, подождите.
+    </div>
+
+    <div class="container" style="visibility: hidden;" id="main-container">
+        <div class="plot-area" id="plot-x-div"></div>
+        <div class="plot-area" id="plot-z-div"></div>
+        <div class="plot-area" id="plot-3d-div"></div>
+    </div>
+
+    <!-- Здесь начинается магия: наш Python-код -->
+    <py-script>
+        import numpy as np
+        import matplotlib.pyplot as plt
+        from pyscript import display
+
+        # --- Параметры ---
+        GRID_POINTS = 50   # Уменьшим для лучшей производительности в браузере
+        HUMP_HEIGHT = 2.0
+        HUMP_WIDTH = 3.0
+
+        class ProfileDragger:
+            def __init__(self):
+                # 1. --- Данные ---
+                self.x_data = np.linspace(-10, 10, GRID_POINTS)
+                self.z_data = np.linspace(-10, 10, GRID_POINTS)
+
+                def make_single_hump(coords):
+                    sigma = HUMP_WIDTH / (2 * np.sqrt(2 * np.log(2)))
+                    return HUMP_HEIGHT * np.exp(-((coords - 0.0)**2) / (2 * sigma**2))
+
+                self.y_x_data = make_single_hump(self.x_data)
+                self.y_z_data = make_single_hump(self.z_data)
+                self.X, self.Z = np.meshgrid(self.x_data, self.z_data)
+
+                # 2. --- Создание фигур Matplotlib ---
+                self.fig_x = plt.figure(figsize=(6, 4))
+                self.ax_x = self.fig_x.add_subplot(111)
+                
+                self.fig_z = plt.figure(figsize=(6, 4))
+                self.ax_z = self.fig_z.add_subplot(111)
+                
+                self.fig_3d = plt.figure(figsize=(6, 5))
+                self.ax_3d = self.fig_3d.add_subplot(111, projection='3d')
+
+                # 3. --- Отрисовка ---
+                self.line_x, = self.ax_x.plot(self.x_data, self.y_x_data, 'b-o', markersize=4, picker=5)
+                self.line_z, = self.ax_z.plot(self.z_data, self.y_z_data, 'r-o', markersize=4, picker=5)
+                self.setup_2d_axes()
+                self.update_3d_plot()
+
+                # 4. --- Состояние ---
+                self.active_artist = None
+                self.active_index = None
+
+                # 5. --- Подключение событий ---
+                # Подключаем к каждой фигуре отдельно
+                self.fig_x.canvas.mpl_connect('button_press_event', self.on_press)
+                self.fig_x.canvas.mpl_connect('motion_notify_event', self.on_motion)
+                self.fig_x.canvas.mpl_connect('button_release_event', self.on_release)
+                
+                self.fig_z.canvas.mpl_connect('button_press_event', self.on_press)
+                self.fig_z.canvas.mpl_connect('motion_notify_event', self.on_motion)
+                self.fig_z.canvas.mpl_connect('button_release_event', self.on_release)
+
+            def setup_2d_axes(self):
+                self.ax_x.set_title('Профиль по оси X')
+                self.ax_x.set_ylabel('Y')
+                self.ax_x.grid(True)
+                self.ax_x.set_ylim(-1, HUMP_HEIGHT + 2)
+
+                self.ax_z.set_title('Профиль по оси Z')
+                self.ax_z.set_xlabel('Z')
+                self.ax_z.set_ylabel('Y')
+                self.ax_z.grid(True)
+                self.ax_z.set_ylim(-1, HUMP_HEIGHT + 2)
+
+            def update_3d_plot(self):
+                self.ax_3d.clear()
+                Y_3D = np.outer(self.y_x_data, self.y_z_data) / HUMP_HEIGHT
+                self.ax_3d.plot_surface(self.X, self.Z, Y_3D.T, cmap='viridis', rstride=2, cstride=2)
+                self.ax_3d.set_title('Итоговая 3D-поверхность')
+                self.ax_3d.set_xlabel('X')
+                self.ax_3d.set_ylabel('Z')
+                self.ax_3d.set_zlabel('Y (Высота)')
+                self.ax_3d.set_zlim(-1, HUMP_HEIGHT + 2)
+                self.fig_3d.canvas.draw_idle()
+
+            def on_press(self, event):
+                if event.inaxes is None: return
+                artist = self.line_x if event.inaxes == self.ax_x else self.line_z
+                
+                # Проверка, что событие пришло от нужной линии
+                if event.inaxes.get_figure() != artist.get_figure(): return
+
+                x_coords, y_coords = artist.get_data()
+                distances = np.sqrt((x_coords - event.xdata)**2 + (y_coords - event.ydata)**2)
+                if np.min(distances) < 0.5:
+                    self.active_artist = artist
+                    self.active_index = np.argmin(distances)
+            
+            def on_motion(self, event):
+                if self.active_artist is None or event.inaxes is None: return
+                new_y = event.ydata
+                if self.active_artist == self.line_x:
+                    self.y_x_data[self.active_index] = new_y
+                    self.line_x.set_ydata(self.y_x_data)
+                    self.fig_x.canvas.draw_idle()
+                else:
+                    self.y_z_data[self.active_index] = new_y
+                    self.line_z.set_ydata(self.y_z_data)
+                    self.fig_z.canvas.draw_idle()
+
+            def on_release(self, event):
+                if self.active_artist is not None:
+                    self.active_artist = None
+                    self.active_index = None
+                    self.update_3d_plot()
+
+        # --- Запуск ---
+        # Скрываем сообщение о загрузке и показываем контейнер
+        loading_msg = Element("loading-message")
+        loading_msg.style.display = "none"
+        main_container = Element("main-container")
+        main_container.style.visibility = "visible"
+
+        # Создаем экземпляр нашего приложения
+        app = ProfileDragger()
+        
+        # Отображаем фигуры в соответствующих div-элементах
+        display(app.fig_x, target="plot-x-div")
+        display(app.fig_z, target="plot-z-div")
+        display(app.fig_3d, target="plot-3d-div")
+
+    </py-script>
+</body>
+</html>
