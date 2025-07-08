@@ -208,42 +208,44 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-function setupTableInteraction(tableWrapper, dataArray, plotDiv) {
-    tableWrapper.addEventListener('change', (e) => {
-        if (e.target.tagName !== 'INPUT') return;
+function init() {
+    loadState();
+    updateUIFromSettings();
+    fullRedraw();
+    
+    setupPlotInteraction(plotElements.plotX);
+    setupPlotInteraction(plotElements.plotZ);
+    
+    document.querySelector('.table-section').addEventListener('change', (e) => {
+        if (e.target.tagName !== 'INPUT' || !e.target.dataset.index) return;
 
+        const tableWrapper = e.target.closest('.table-container');
+        if (!tableWrapper) return;
+
+        const isXTable = tableWrapper.id === 'tableWrapperX';
+        const dataArray = isXTable ? y_x_data : y_z_data;
+        const plotDiv = isXTable ? plotElements.plotX : plotElements.plotZ;
+        
         const index = parseInt(e.target.dataset.index);
         const value = parseFloat(e.target.value);
-        
-        if (!isNaN(value)) {
+
+        if (!isNaN(value) && dataArray[index] !== undefined) {
             dataArray[index] = value;
             
             Plotly.restyle(plotDiv, { y: [dataArray] }, [0]);
-            
             updateAllLayoutsAndSave();
-
         } else {
-            e.target.value = dataArray[index].toFixed(3);
+            e.target.value = dataArray[index]?.toFixed(3) || 0;
         }
     });
 
-    tableWrapper.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
+    document.querySelector('.table-section').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
             e.target.blur();
             e.preventDefault();
         }
     });
 }
-    function init() {
-        loadState();
-        updateUIFromSettings();
-        fullRedraw();
-        
-        setupPlotInteraction(plotElements.plotX);
-        setupPlotInteraction(plotElements.plotZ);
-        setupTableInteraction(tableWrapperX, y_x_data, plotElements.plotX);
-        setupTableInteraction(tableWrapperZ, y_z_data, plotElements.plotZ);
-    }
 
     init();
 });
